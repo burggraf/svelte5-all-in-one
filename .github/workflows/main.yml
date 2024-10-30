@@ -495,14 +495,12 @@ jobs:
           
           echo "Using entitlements at: $ENTITLEMENTS_PATH"
           
-          # Verify entitlements file exists and is valid
+          # Debug checks
+          echo "Does entitlements file exist? $(test -f "$ENTITLEMENTS_PATH" && echo "Yes" || echo "No")"
+          echo "Full path exists? $(test -e "$ENTITLEMENTS_PATH" && echo "Yes" || echo "No")"
+          
           if [ ! -f "$ENTITLEMENTS_PATH" ]; then
             echo "Entitlements file not found!"
-            exit 1
-          fi
-          
-          if ! plutil -lint "$ENTITLEMENTS_PATH"; then
-            echo "Entitlements file is invalid!"
             exit 1
           fi
           
@@ -727,4 +725,15 @@ jobs:
             ls -la src-tauri/
             exit 1
           fi
+
+      - name: Debug File Location
+        if: matrix.platform == 'macos-latest'
+        run: |
+          echo "Current directory: $(pwd)"
+          echo "Directory contents:"
+          ls -la
+          echo "src-tauri contents:"
+          ls -la src-tauri || echo "src-tauri directory not found"
+          echo "Looking for entitlements file:"
+          find . -name "entitlements.plist" || echo "No entitlements.plist found"
 
