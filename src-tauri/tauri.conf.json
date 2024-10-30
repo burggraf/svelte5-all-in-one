@@ -4,9 +4,11 @@
     "beforeBuildCommand": "",
     "beforeDevCommand": ""
   },
-  "identifier": "com.example.sv1",
-  "productName": "sv1",
-  "version": "0.3.0",
+  "package": {
+    "productName": "sv1",
+    "version": "0.3.0",
+    "identifier": "com.example.sv1"
+  },
   "app": {
     "security": {
       "csp": null
@@ -37,7 +39,6 @@
     "shortDescription": "",
     "resources": [],
     "targets": "all",
-    "identifier": "com.mycompany.sv1demo",
     "macOS": {
       "entitlements": "entitlements.plist",
       "exceptionDomain": null,
