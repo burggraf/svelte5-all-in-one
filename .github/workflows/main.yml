@@ -491,10 +491,13 @@ jobs:
           DEVELOPER_TEAM_ID: ${{ secrets.DEVELOPER_TEAM_ID }}
         run: |
           APP_PATH="./src-tauri/target/aarch64-apple-darwin/release/bundle/macos/sv1-demo.app"
+          ENTITLEMENTS_PATH="$(pwd)/src-tauri/entitlements.plist"
+          
+          echo "Using entitlements at: $ENTITLEMENTS_PATH"
           
           # Sign with hardened runtime
           codesign --force --options runtime \
-            --entitlements src-tauri/entitlements.plist \
+            --entitlements "$ENTITLEMENTS_PATH" \
             --sign "Developer ID Application: Mantis Bible Company (HEGN9W2S9J)" \
             --timestamp \
             --deep \
@@ -610,4 +613,29 @@ jobs:
           
           echo "Verifying DMG signing..."
           codesign -vvv --strict "$DMG_PATH"
+
+      - name: Debug Entitlements File
+        if: matrix.platform == 'macos-latest'
+        run: |
+          echo "Current directory: $(pwd)"
+          echo "Checking if entitlements file exists:"
+          ls -la src-tauri/entitlements.plist || echo "File not found"
+          echo "File contents:"
+          cat src-tauri/entitlements.plist || echo "Cannot read file"
+
+      - name: Fix Entitlements File
+        if: matrix.platform == 'macos-latest'
+        run: |
+          # Convert to Unix line endings and ensure proper formatting
+          tr -d '\r' < src-tauri/entitlements.plist > src-tauri/entitlements.tmp
+          mv src-tauri/entitlements.tmp src-tauri/entitlements.plist
+          
+          # Set proper permissions
+          chmod 644 src-tauri/entitlements.plist
+
+      - name: Verify Entitlements File
+        if: matrix.platform == 'macos-latest'
+        run: |
+          # Verify plist format
+          plutil -lint src-tauri/entitlements.plist || echo "Plist validation failed"
 
