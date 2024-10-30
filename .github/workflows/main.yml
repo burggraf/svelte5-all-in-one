@@ -15,6 +15,12 @@ jobs:
         include:
           - platform: 'macos-latest'
             args: '--target aarch64-apple-darwin'
+          #- platform: 'macos-latest'
+          #  args: '--target x86_64-apple-darwin'
+          #- platform: 'ubuntu-22.04'
+          #  args: ''
+          #- platform: 'windows-latest'
+          #  args: ''
 
     runs-on: ${{ matrix.platform }}
     steps:
@@ -35,3 +41,730 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.0-dev libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+
+      - name: Install Tauri CLI
+        run: npm install -g @tauri-apps/cli
+  
+      # For the Windows build job, modify the npm installation steps:
+      - name: Install frontend dependencies (Windows)
+        if: matrix.platform == 'windows-latest'
+        shell: powershell
+        run: |
+          npm cache clean --force
+          if (Test-Path node_modules) { Remove-Item -Recurse -Force node_modules }
+          if (Test-Path package-lock.json) { Remove-Item -Force package-lock.json }
+          npm install -g @rollup/rollup-win32-x64-msvc
+          npm install --no-package-lock
+
+      - name: Install frontend dependencies (non-Windows)
+        if: matrix.platform != 'windows-latest'
+        run: npm ci --force
+
+      - name: Clean Cargo cache (Windows)
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          if (Test-Path src-tauri/Cargo.lock) { Remove-Item -Force src-tauri/Cargo.lock }
+          if (Test-Path src-tauri/target) { Remove-Item -Recurse -Force src-tauri/target }
+
+      - name: Clean Cargo cache (non-Windows)
+        if: runner.os != 'Windows'
+        run: |
+          rm -f src-tauri/Cargo.lock
+          rm -rf src-tauri/target
+
+      # Backup icons
+      - name: Backup icons
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          New-Item -ItemType Directory -Force -Path icons_backup
+          Copy-Item -Path "src-tauri/icons/*" -Destination icons_backup -Recurse -Force
+          Get-ChildItem icons_backup  # Verify the backup
+
+      - name: Backup icons
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          mkdir -p icons_backup
+          cp -r src-tauri/icons/* icons_backup/
+
+      # Clean src-tauri directory
+      - name: Clean src-tauri
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          if (Test-Path src-tauri) { Remove-Item -Recurse -Force src-tauri }
+
+      - name: Clean src-tauri
+        if: runner.os != 'Windows'
+        shell: bash
+        run: rm -rf src-tauri
+
+      # Restore icons
+      - name: Restore icons
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          New-Item -ItemType Directory -Force -Path src-tauri/icons
+          Copy-Item -Path "icons_backup/*" -Destination src-tauri/icons -Recurse -Force
+          Get-ChildItem src-tauri/icons  # Verify the icons are restored
+          if (-not (Test-Path "src-tauri/icons/icon.ico")) {
+            Write-Error "icon.ico not found after restore!"
+            exit 1
+          }
+
+      - name: Restore icons
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          mkdir -p src-tauri/icons
+          cp -r icons_backup/* src-tauri/icons/
+          ls -la src-tauri/icons/  # Verify the icons are restored
+
+      # Create directory structure
+      - name: Create directory structure
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          if (-not (Test-Path src-tauri/src)) {
+              New-Item -ItemType Directory -Force -Path src-tauri/src
+          }
+          if (-not (Test-Path src-tauri/icons)) {
+              New-Item -ItemType Directory -Force -Path src-tauri/icons
+          }
+
+      - name: Create directory structure
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          mkdir -p src-tauri/src src-tauri/icons
+
+      # Add this step after checkout and before creating files
+      - name: Get version from package.json
+        id: package-version
+        shell: bash
+        run: |
+          version=$(node -p "require('./package.json').version")
+          echo "VERSION=$version" >> $GITHUB_ENV
+          echo "Version from package.json: $version"
+
+      - name: Get PACKAGE_NAME from package.json
+        id: package-name
+        shell: bash
+        run: |
+          package_name=$(node -p "require('./package.json').name")
+          echo "PACKAGE_NAME=$package_name" >> $GITHUB_ENV
+          echo "Name from package.json: $package_name"
+
+      - name: Get PACKAGE_IDENTIFIER from package.json
+        id: package-identifier
+        shell: bash
+        run: |
+          package_identifier=$(node -p "require('./package.json').identifier")
+          echo "PACKAGE_IDENTIFIER=$package_identifier" >> $GITHUB_ENV
+          echo "Indentifier from package.json: $package_identifier"
+
+      # Create Cargo.toml
+      - name: Create Cargo.toml
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          $content = @'
+          [package]
+          name = "${{ env.PACKAGE_NAME }}"
+          version = "${{ env.VERSION }}"
+          description = "A Tauri App"
+          authors = ["you"]
+          license = ""
+          repository = ""
+          default-run = "${{ env.PACKAGE_NAME }}"
+          edition = "2021"
+          rust-version = "1.60"
+          build = "build.rs"
+
+          [build-dependencies]
+          tauri-build = { version = "2.0.0-rc.13", features = [] }
+
+          [dependencies]
+          serde_json = "1.0"
+          serde = { version = "1.0", features = ["derive"] }
+          tauri = { version = "2.0.0-rc.13" }
+
+          [features]
+          custom-protocol = [ "tauri/custom-protocol" ]
+          '@
+          Set-Content -Path "src-tauri/Cargo.toml" -Value $content
+
+      - name: Create Cargo.toml
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          cat > src-tauri/Cargo.toml << 'EOF'
+          [package]
+          name = "${{ env.PACKAGE_NAME }}"
+          version = "${{ env.VERSION }}"
+          description = "A Tauri App"
+          authors = ["you"]
+          license = ""
+          repository = ""
+          default-run = "${{ env.PACKAGE_NAME }}"
+          edition = "2021"
+          rust-version = "1.60"
+          build = "build.rs"
+
+          [build-dependencies]
+          tauri-build = { version = "2.0.0-rc.13", features = [] }
+
+          [dependencies]
+          serde_json = "1.0"
+          serde = { version = "1.0", features = ["derive"] }
+          tauri = { version = "2.0.0-rc.13" }
+
+          [features]
+          custom-protocol = [ "tauri/custom-protocol" ]
+          EOF
+
+      # Create build.rs
+      - name: Create build.rs
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          $content = @'
+          fn main() {
+            tauri_build::build()
+          }
+          '@
+          Set-Content -Path "src-tauri/build.rs" -Value $content
+
+      # Create main.rs
+      - name: Create main.rs
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          $content = @'
+          #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
+          fn main() {
+            tauri::Builder::default()
+              .run(tauri::generate_context!())
+              .expect("error while running tauri application");
+          }
+          '@
+          New-Item -ItemType Directory -Force -Path src-tauri/src
+          Set-Content -Path "src-tauri/src/main.rs" -Value $content
+
+      # Verify the icon
+      - name: Verify icon
+      if: runner.os == 'Windows'
+      shell: powershell
+      run: |
+        Get-ChildItem -Path src-tauri/icons/32x32.png -Force | Select-Object FullName, Length, LastWriteTime
+
+      - name: Verify icon
+      if: runner.os != 'Windows'
+      shell: bash
+      run: |
+        ls -la src-tauri/icons/32x32.png
+        file src-tauri/icons/32x32.png
+
+      # Create tauri.conf.json (Windows)
+      - name: Create tauri.conf.json (Windows)
+      if: runner.os == 'Windows'
+      shell: powershell
+      run: |
+        $content = @'
+        {
+          "$schema": "https://raw.githubusercontent.com/tauri-apps/tauri/dev/tooling/cli/schema.json",
+          "identifier": "${{ env.PACKAGE_IDENTIFIER }}",
+          "productName": "${{ env.PACKAGE_NAME }}",
+          "version": "${{ env.VERSION }}",
+          "build": {
+            "beforeBuildCommand": "npm run build",
+            "beforeDevCommand": "npm run dev",
+            "frontendDist": "../build"
+          },
+          "app": {
+            "windows": [
+              {
+                "fullscreen": false,
+                "height": 600,
+                "resizable": true,
+                "title": "${{ env.PACKAGE_NAME }}",
+                "width": 800
+              }
+            ],
+            "security": {
+              "csp": null
+            }
+          },
+          "bundle": {
+            "active": true,
+            "icon": [
+              "icons/32x32.png"
+            ],
+            "category": "DeveloperTool",
+            "copyright": "",
+            "macOS": {
+              "entitlements": "entitlements.plist",
+              "exceptionDomain": "",
+              "frameworks": [],
+              "providerShortName": null,
+              "signingIdentity": null
+            }
+          }
+        }
+        '@
+        Set-Content -Path "src-tauri/tauri.conf.json" -Value $content
+
+      - name: Create tauri.conf.json (non-Windows)
+      if: runner.os != 'Windows'
+      shell: bash
+      run: |
+        cat > src-tauri/tauri.conf.json << 'EOF'
+        {
+          "$schema": "https://raw.githubusercontent.com/tauri-apps/tauri/dev/tooling/cli/schema.json",
+          "identifier": "${{ env.PACKAGE_IDENTIFIER }}",
+          "productName": "${{ env.PACKAGE_NAME }}",
+          "version": "${{ env.VERSION }}",
+          "build": {
+            "beforeBuildCommand": "npm run build",
+            "beforeDevCommand": "npm run dev",
+            "frontendDist": "../build"
+          },
+          "app": {
+            "windows": [
+              {
+                "fullscreen": false,
+                "height": 600,
+                "resizable": true,
+                "title": "${{ env.PACKAGE_NAME }}",
+                "width": 800
+              }
+            ],
+            "security": {
+              "csp": null
+            }
+          },
+          "bundle": {
+            "active": true,
+            "icon": [
+              "icons/32x32.png"
+            ],
+            "category": "DeveloperTool",
+            "copyright": "",
+            "macOS": {
+              "entitlements": "entitlements.plist",
+              "exceptionDomain": "",
+              "frameworks": [],
+              "providerShortName": null,
+              "signingIdentity": null
+            }
+          }
+        }
+        EOF
+
+      # Install frontend dependencies and build the app
+      - name: Install and build frontend (Windows)
+      if: runner.os == 'Windows'
+      shell: powershell
+      run: |
+        npm ci --force
+        npm run build
+        Get-ChildItem -Path build -Force | Select-Object Name, Length, LastWriteTime
+
+      - name: Install and build frontend (non-Windows)
+      if: runner.os != 'Windows'
+      shell: bash
+      run: |
+        npm ci --force
+        npm run build
+        ls -la build
+
+      # Verify build output
+      - name: Verify build output
+      if: runner.os == 'Windows'
+      shell: powershell
+      run: |
+        if (Test-Path build) {
+          Get-ChildItem -Path build -Force | Select-Object Name, Length, LastWriteTime
+        } else {
+          Write-Error "Build directory not found!"
+          exit 1
+        }
+
+      - name: Verify build output
+      if: runner.os != 'Windows'
+      shell: bash
+      run: |
+        ls -la build  # Verify the build output
+
+      # Add these debug steps right before the Tauri build action
+      - name: Debug Icon Path (Windows)
+      if: runner.os == 'Windows'
+      shell: powershell
+      run: |
+        Write-Host "Current Directory: $(Get-Location)"
+        Write-Host "Checking src-tauri/icons directory:"
+        Get-ChildItem -Path "src-tauri/icons" -Force -Recurse
+        Write-Host "Checking icon.ico specifically:"
+        if (Test-Path "src-tauri/icons/icon.ico") {
+          $icon = Get-Item "src-tauri/icons/icon.ico"
+          Write-Host "Icon exists: $($icon.FullName)"
+          Write-Host "Icon size: $($icon.Length) bytes"
+          Write-Host "Last modified: $($icon.LastWriteTime)"
+        } else {
+          Write-Host "icon.ico not found!"
+        }
+        Write-Host "Checking tauri.conf.json:"
+        Get-Content "src-tauri/tauri.conf.json"
+
+      # Modify the tauri.conf.json to use absolute path
+      - name: Update tauri.conf.json icon path (Windows)
+      if: runner.os == 'Windows'
+      shell: powershell
+      run: |
+        $iconPath = (Resolve-Path "src-tauri/icons/icon.ico").Path
+        $content = Get-Content "src-tauri/tauri.conf.json" -Raw
+        $json = $content | ConvertFrom-Json
+        $json.bundle.icon = @($iconPath)
+        $json | ConvertTo-Json -Depth 32 | Set-Content "src-tauri/tauri.conf.json"
+        Write-Host "Updated tauri.conf.json with absolute icon path:"
+        Get-Content "src-tauri/tauri.conf.json"
+
+      # Then continue with your existing Tauri build action
+      - uses: tauri-apps/tauri-action@v0.4.3
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        TAURI_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
+        TAURI_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
+      with:
+        tagName: app-v${{ env.VERSION }}
+        releaseName: 'App v${{ env.VERSION }}'
+        releaseBody: 'See the assets to download this version and install.'
+        releaseDraft: true
+        prerelease: false
+        args: ${{ matrix.args }}
+
+      # Add macOS specific steps after the Tauri build
+      - name: Decode and Import Signing Certificate
+      if: matrix.platform == 'macos-latest'
+      env:
+        CERTIFICATE_BASE64: ${{ secrets.MACOS_CERTIFICATE_BASE64 }}
+        CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+      run: |
+        echo "$CERTIFICATE_BASE64" | base64 --decode > certificate.p12
+        security create-keychain -p "build" build.keychain
+        security default-keychain -s build.keychain
+        security unlock-keychain -p "build" build.keychain
+        security import certificate.p12 -k build.keychain -P "$CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+        security set-key-partition-list -S apple-tool:,apple: -s -k "build" build.keychain
+
+      # First create the entitlements file
+      - name: Create Entitlements File
+      if: matrix.platform == 'macos-latest'
+      run: |
+        echo "Creating entitlements file..."
+        mkdir -p src-tauri
+        cat > src-tauri/entitlements.plist << 'EOL'
+        <?xml version="1.0" encoding="UTF-8"?>
+        <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+        <plist version="1.0">
+        <dict>
+            <key>com.apple.security.automation.apple-events</key>
+            <true/>
+            <key>com.apple.security.cs.allow-jit</key>
+            <true/>
+            <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+            <true/>
+            <key>com.apple.security.cs.disable-library-validation</key>
+            <true/>
+            <key>com.apple.security.cs.debugger</key>
+            <true/>
+            <key>com.apple.security.device.audio-input</key>
+            <true/>
+            <key>com.apple.security.device.camera</key>
+            <true/>
+            <key>com.apple.security.personal-information.addressbook</key>
+            <true/>
+            <key>com.apple.security.personal-information.calendars</key>
+            <true/>
+            <key>com.apple.security.hardened-runtime</key>
+            <true/>
+        </dict>
+        </plist>
+        EOL
+
+      # Then verify it exists
+      - name: Verify Entitlements File
+      if: matrix.platform == 'macos-latest'
+      run: |
+        echo "Verifying entitlements file..."
+        ls -la src-tauri/entitlements.plist
+        cat src-tauri/entitlements.plist
+
+      # Then sign the app
+      - name: Sign macOS App
+      if: matrix.platform == 'macos-latest'
+      env:
+        APPLE_ID: ${{ secrets.APPLE_ID }}
+        APPLE_ID_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
+        DEVELOPER_TEAM_ID: ${{ secrets.DEVELOPER_TEAM_ID }}
+      run: |
+        APP_PATH="./src-tauri/target/aarch64-apple-darwin/release/bundle/macos/sv1-demo.app"
+        ENTITLEMENTS_PATH="$(pwd)/src-tauri/entitlements.plist"
+        
+        # First, remove any existing signatures
+        codesign --remove-signature "$APP_PATH" || true
+        
+        # Sign all binaries inside the app bundle
+        find "$APP_PATH" -type f -name "*.dylib" -o -name "*.so" | while read -r file; do
+          codesign --force \
+            --sign "Developer ID Application: Mantis Bible Company (HEGN9W2S9J)" \
+            --options runtime \
+            --timestamp \
+            "$file"
+        done
+        
+        # Sign the main app bundle
+        codesign --force \
+          --entitlements "$ENTITLEMENTS_PATH" \
+          --sign "Developer ID Application: Mantis Bible Company (HEGN9W2S9J)" \
+          --options runtime \
+          --timestamp \
+          --deep \
+          "$APP_PATH"
+
+      - name: Notarize App
+      if: matrix.platform == 'macos-latest'
+      env:
+        APPLE_ID: ${{ secrets.APPLE_ID }}
+        APPLE_ID_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
+        DEVELOPER_TEAM_ID: ${{ secrets.DEVELOPER_TEAM_ID }}
+      run: |
+        APP_PATH="./src-tauri/target/aarch64-apple-darwin/release/bundle/macos/sv1-demo.app"
+        
+        # Create zip for notarization
+        echo "Creating zip for notarization..."
+        ditto -c -k --keepParent "$APP_PATH" "sv1-demo.zip"
+        
+        echo "Submitting for notarization..."
+        xcrun notarytool submit "sv1-demo.zip" \
+          --apple-id "$APPLE_ID" \
+          --team-id "$DEVELOPER_TEAM_ID" \
+          --password "$APPLE_ID_PASSWORD" \
+          --wait
+        
+        echo "Stapling app..."
+        xcrun stapler staple "$APP_PATH"
+        
+        # Verify everything
+        echo "Verifying code signing..."
+        codesign -vvv --deep --strict "$APP_PATH"
+        
+        echo "Verifying notarization..."
+        spctl --assess -vv --type exec "$APP_PATH"
+        
+        echo "Verifying stapling..."
+        stapler validate "$APP_PATH"
+
+      - name: Create and Sign DMG
+      if: matrix.platform == 'macos-latest'
+      run: |
+        APP_PATH="./src-tauri/target/aarch64-apple-darwin/release/bundle/macos/sv1-demo.app"
+        DMG_PATH="./src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/sv1-demo_${{ env.VERSION }}_aarch64.dmg"
+        DMG_DIR="$(dirname "$DMG_PATH")"
+        TEMP_DIR=$(mktemp -d)
+        
+        # Create a temporary directory for DMG contents
+        mkdir -p "$DMG_DIR"
+        cp -R "$APP_PATH" "$TEMP_DIR/"
+        
+        echo "Creating DMG..."
+        hdiutil create -volname "sv1-demo" \
+          -srcfolder "$TEMP_DIR" \
+          -ov \
+          -format UDZO \
+          "$DMG_PATH"
+        
+        echo "Signing DMG..."
+        codesign --force \
+          --sign "Developer ID Application: Mantis Bible Company (HEGN9W2S9J)" \
+          --timestamp \
+          --deep \
+          "$DMG_PATH"
+        
+        # Clean up
+        rm -rf "$TEMP_DIR"
+
+      - name: Notarize DMG
+      if: matrix.platform == 'macos-latest'
+      env:
+        APPLE_ID: ${{ secrets.APPLE_ID }}
+        APPLE_ID_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
+        DEVELOPER_TEAM_ID: ${{ secrets.DEVELOPER_TEAM_ID }}
+      run: |
+        DMG_PATH="./src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/sv1-demo_${{ env.VERSION }}_aarch64.dmg"
+        
+        echo "Submitting DMG for notarization..."
+        xcrun notarytool submit "$DMG_PATH" \
+          --apple-id "$APPLE_ID" \
+          --team-id "$DEVELOPER_TEAM_ID" \
+          --password "$APPLE_ID_PASSWORD" \
+          --wait
+        
+        echo "Stapling DMG..."
+        xcrun stapler staple "$DMG_PATH"
+        
+        echo "Verifying DMG..."
+        codesign -vvv --deep --strict "$DMG_PATH"
+        xcrun stapler validate "$DMG_PATH"
+
+      # Make sure we're uploading the notarized versions
+      - name: Verify Final Artifacts
+      if: matrix.platform == 'macos-latest'
+      run: |
+        APP_PATH="./src-tauri/target/aarch64-apple-darwin/release/bundle/macos/sv1-demo.app"
+        DMG_PATH="./src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/sv1-demo_${{ env.VERSION }}_aarch64.dmg"
+        
+        echo "Final app verification:"
+        codesign -vvv --deep --strict "$APP_PATH"
+        spctl --assess -vv "$APP_PATH"
+        
+        echo "Final DMG verification:"
+        codesign -vvv --deep --strict "$DMG_PATH"
+        # Verify DMG is properly stapled
+        xcrun stapler validate "$DMG_PATH"
+        
+        # Mount DMG and verify its contents
+        echo "Verifying DMG contents..."
+        MOUNT_POINT=$(mktemp -d)
+        hdiutil attach "$DMG_PATH" -mountpoint "$MOUNT_POINT" -nobrowse
+        
+        # Verify the app inside the DMG
+        DMG_APP="$MOUNT_POINT/sv1-demo.app"
+        if [ -d "$DMG_APP" ]; then
+          echo "Verifying app inside DMG:"
+          codesign -vvv --deep --strict "$DMG_APP"
+        else
+          echo "Warning: App not found in expected location in DMG"
+          ls -la "$MOUNT_POINT"
+        fi
+        
+        # Cleanup
+        hdiutil detach "$MOUNT_POINT"
+        rm -rf "$MOUNT_POINT"
+
+      # Finally, upload the artifacts
+      - name: Upload Artifacts
+      if: matrix.platform == 'macos-latest'
+      uses: actions/upload-artifact@v3
+      with:
+        name: macos-artifacts
+        path: |
+          ./src-tauri/target/aarch64-apple-darwin/release/bundle/macos/*.app
+          ./src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/*.dmg
+
+      # Add verification step before notarization
+      - name: Verify Code Signing
+      if: matrix.platform == 'macos-latest'
+      run: |
+        APP_PATH="./src-tauri/target/aarch64-apple-darwin/release/bundle/macos/sv1-demo.app"
+        DMG_PATH="./src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/sv1-demo_${{ env.VERSION }}_aarch64.dmg"
+        
+        echo "Verifying app signing..."
+        codesign -vvv --deep --strict "$APP_PATH"
+        
+        echo "Checking app entitlements..."
+        codesign -d --entitlements :- "$APP_PATH"
+        
+        echo "Verifying DMG signing..."
+        codesign -vvv --strict "$DMG_PATH"
+
+      # Add these debug steps before signing
+      - name: Debug Build Directory
+      if: matrix.platform == 'macos-latest'
+      run: |
+        echo "Checking build directories..."
+        echo "Current directory: $(pwd)"
+        echo "Listing src-tauri/target/release/bundle contents:"
+        ls -R src-tauri/target/release/bundle || echo "Bundle directory not found"
+        
+        # Find the actual .app file
+        echo "Finding .app files:"
+        find . -name "*.app" || echo "No .app files found"
+        
+        # Check if DMG exists
+        echo "Finding .dmg files:"
+        find . -name "*.dmg" || echo "No .dmg files found"
+
+      # Optional: Upload artifacts
+      - name: Upload macOS Artifacts
+      if: matrix.platform == 'macos-latest'
+      uses: actions/upload-artifact@v3
+      with:
+        name: macos-app
+        path: |
+          ./src-tauri/target/aarch64-apple-darwin/release/bundle/macos/*.app
+          ./src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/*.dmg
+
+      - name: Debug Entitlements File
+      if: matrix.platform == 'macos-latest'
+      run: |
+        echo "Current directory: $(pwd)"
+        echo "Checking if entitlements file exists:"
+        ls -la src-tauri/entitlements.plist || echo "File not found"
+        echo "File contents:"
+        cat src-tauri/entitlements.plist || echo "Cannot read file"
+
+      - name: Fix Entitlements File
+      if: matrix.platform == 'macos-latest'
+      run: |
+        # Convert to Unix line endings and ensure proper formatting
+        tr -d '\r' < src-tauri/entitlements.plist > src-tauri/entitlements.tmp
+        mv src-tauri/entitlements.tmp src-tauri/entitlements.plist
+        
+        # Set proper permissions
+        chmod 644 src-tauri/entitlements.plist
+
+      - name: Verify Entitlements File
+      if: matrix.platform == 'macos-latest'
+      run: |
+        # Verify plist format
+        plutil -lint src-tauri/entitlements.plist || echo "Plist validation failed"
+
+      - name: Sign macOS App
+      if: matrix.platform == 'macos-latest'
+      env:
+        APPLE_ID: ${{ secrets.APPLE_ID }}
+        APPLE_ID_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
+        DEVELOPER_TEAM_ID: ${{ secrets.DEVELOPER_TEAM_ID }}
+      run: |
+        APP_PATH="./src-tauri/target/aarch64-apple-darwin/release/bundle/macos/sv1-demo.app"
+        ENTITLEMENTS_PATH="$(pwd)/src-tauri/entitlements.plist"
+        
+        echo "Using entitlements at: $ENTITLEMENTS_PATH"
+        echo "Checking if entitlements file exists:"
+        ls -la "$ENTITLEMENTS_PATH" || echo "File not found"
+        
+        # Verify entitlements file exists and is valid
+        if [ ! -f "$ENTITLEMENTS_PATH" ]; then
+          echo "Entitlements file not found at: $ENTITLEMENTS_PATH"
+          echo "Current directory contents:"
+          ls -la
+          echo "src-tauri contents:"
+          ls -la src-tauri/
+          exit 1
+        fi
+
+      - name: Debug File Location
+      if: matrix.platform == 'macos-latest'
+      run: |
+        echo "Current directory: $(pwd)"
+        echo "Directory contents:"
+        ls -la
+        echo "src-tauri contents:"
+        ls -la src-tauri || echo "src-tauri directory not found"
+        echo "Looking for entitlements file:"
+        find . -name "entitlements.plist" || echo "No entitlements.plist found"
+        
