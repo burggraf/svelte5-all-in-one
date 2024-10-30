@@ -489,7 +489,16 @@ jobs:
           APPLE_ID_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
           DEVELOPER_TEAM_ID: ${{ secrets.DEVELOPER_TEAM_ID }}
         run: |
-          codesign --force --options runtime --sign "Developer ID Application: Mantis Bible Company (HEGN9W2S9J)" "src-tauri/target/release/bundle/macos/*.app"
+          # Find the .app file
+          APP_PATH=$(find . -name "*.app" -print -quit)
+          if [ -z "$APP_PATH" ]; then
+            echo "No .app file found!"
+            exit 1
+          fi
+          echo "Found app at: $APP_PATH"
+          
+          # Sign the app
+          codesign --force --options runtime --sign "Developer ID Application: Mantis Bible Company (HEGN9W2S9J)" "$APP_PATH"
 
       - name: Notarize macOS App
         if: matrix.platform == 'macos-latest'
@@ -498,10 +507,38 @@ jobs:
           APPLE_ID_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
           DEVELOPER_TEAM_ID: ${{ secrets.DEVELOPER_TEAM_ID }}
         run: |
-          appPath="src-tauri/target/release/bundle/macos/*.app"
-          dmgPath="src-tauri/target/release/bundle/dmg/*.dmg"
-          xcrun notarytool submit "$dmgPath" --apple-id "$APPLE_ID" --team-id "$DEVELOPER_TEAM_ID" --password "$APPLE_ID_PASSWORD" --wait
-          xcrun stapler staple "$appPath"
+          # Find the .app and .dmg files
+          APP_PATH=$(find . -name "*.app" -print -quit)
+          DMG_PATH=$(find . -name "*.dmg" -print -quit)
+          
+          if [ -z "$DMG_PATH" ]; then
+            echo "No .dmg file found!"
+            exit 1
+          fi
+          
+          echo "Found DMG at: $DMG_PATH"
+          echo "Found APP at: $APP_PATH"
+          
+          # Notarize and staple
+          xcrun notarytool submit "$DMG_PATH" --apple-id "$APPLE_ID" --team-id "$DEVELOPER_TEAM_ID" --password "$APPLE_ID_PASSWORD" --wait
+          xcrun stapler staple "$APP_PATH"
+
+      # Add these debug steps before signing
+      - name: Debug Build Directory
+        if: matrix.platform == 'macos-latest'
+        run: |
+          echo "Checking build directories..."
+          echo "Current directory: $(pwd)"
+          echo "Listing src-tauri/target/release/bundle contents:"
+          ls -R src-tauri/target/release/bundle || echo "Bundle directory not found"
+          
+          # Find the actual .app file
+          echo "Finding .app files:"
+          find . -name "*.app" || echo "No .app files found"
+          
+          # Check if DMG exists
+          echo "Finding .dmg files:"
+          find . -name "*.dmg" || echo "No .dmg files found"
 
       # Optional: Upload artifacts
       - name: Upload macOS Artifacts
@@ -510,6 +547,6 @@ jobs:
         with:
           name: macos-app
           path: |
-            src-tauri/target/release/bundle/macos/*.app
-            src-tauri/target/release/bundle/dmg/*.dmg
+            **/*.app
+            **/*.dmg
 
