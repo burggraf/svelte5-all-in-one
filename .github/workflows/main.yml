@@ -536,9 +536,9 @@ jobs:
       - name: Notarize App
         if: matrix.platform == 'macos-latest'
         env:
-        APPLE_ID: ${{ secrets.APPLE_ID }}
-        APPLE_ID_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
-        DEVELOPER_TEAM_ID: ${{ secrets.DEVELOPER_TEAM_ID }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_ID_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
+          DEVELOPER_TEAM_ID: ${{ secrets.DEVELOPER_TEAM_ID }}
         run: |
           APP_PATH="./src-tauri/target/aarch64-apple-darwin/release/bundle/macos/sv1-demo.app"
           # Create zip for notarization
@@ -657,10 +657,10 @@ jobs:
         if: matrix.platform == 'macos-latest'
         uses: actions/upload-artifact@v3
         with:
-        name: macos-artifacts
-        path: |
-          ./src-tauri/target/aarch64-apple-darwin/release/bundle/macos/*.app
-          ./src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/*.dmg
+          name: macos-artifacts
+          path: |
+            ./src-tauri/target/aarch64-apple-darwin/release/bundle/macos/*.app
+            ./src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/*.dmg
 
       # Add verification step before notarization
       - name: Verify Code Signing
@@ -699,10 +699,10 @@ jobs:
         if: matrix.platform == 'macos-latest'
         uses: actions/upload-artifact@v3
         with:
-        name: macos-app
-        path: |
-          ./src-tauri/target/aarch64-apple-darwin/release/bundle/macos/*.app
-          ./src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/*.dmg
+          name: macos-app
+          path: |
+            ./src-tauri/target/aarch64-apple-darwin/release/bundle/macos/*.app
+            ./src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/*.dmg
 
       - name: Debug Entitlements File
         if: matrix.platform == 'macos-latest'
@@ -732,9 +732,9 @@ jobs:
       - name: Sign macOS App
         if: matrix.platform == 'macos-latest'
         env:
-        APPLE_ID: ${{ secrets.APPLE_ID }}
-        APPLE_ID_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
-        DEVELOPER_TEAM_ID: ${{ secrets.DEVELOPER_TEAM_ID }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_ID_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
+          DEVELOPER_TEAM_ID: ${{ secrets.DEVELOPER_TEAM_ID }}
         run: |
           APP_PATH="./src-tauri/target/aarch64-apple-darwin/release/bundle/macos/sv1-demo.app"
           ENTITLEMENTS_PATH="$(pwd)/src-tauri/entitlements.plist"
