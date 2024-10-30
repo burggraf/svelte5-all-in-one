@@ -625,7 +625,9 @@ jobs:
           
           echo "Verifying DMG stapling..."
           xcrun stapler validate "$DMG_PATH"
-          spctl --assess -vv "$DMG_PATH"
+          
+          echo "Verifying DMG signature..."
+          codesign -vvv --deep --strict "$DMG_PATH"
 
       # Make sure we're uploading the notarized versions
       - name: Verify Final Artifacts
