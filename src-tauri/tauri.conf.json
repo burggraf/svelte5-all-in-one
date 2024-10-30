@@ -1,5 +1,5 @@
 {
-  "$schema": "../node_modules/@tauri-apps/cli/schema.json",
+  "$schema": "https://raw.githubusercontent.com/tauri-apps/tauri/dev/tooling/cli/schema.json",
   "build": {
     "beforeBuildCommand": "",
     "beforeDevCommand": ""
@@ -34,33 +34,22 @@
       "icons/icon.ico"
     ],
     "longDescription": "",
+    "shortDescription": "",
+    "resources": [],
+    "targets": "all",
+    "identifier": "com.mycompany.sv1demo",
     "macOS": {
       "entitlements": "entitlements.plist",
-      "exceptionDomain": "",
+      "exceptionDomain": null,
       "frameworks": [],
-      "providerShortName": null,
-      "signingIdentity": null
+      "minimumSystemVersion": null,
+      "providerShortName": "TEAMID",
+      "signingIdentity": "Developer ID Application: Mantis Bible Company (HEGN9W2S9J)"
     },
-    "resources": [],
-    "shortDescription": "",
-    "targets": "all",
     "windows": {
       "certificateThumbprint": null,
       "digestAlgorithm": "sha256",
       "timestampUrl": ""
-    }
-  },
-  "tauri": {
-    "bundle": {
-      "identifier": "com.mycompany.sv1demo",
-      "macOS": {
-        "signingIdentity": "Developer ID Application: Mantis Bible Company (HEGN9W2S9J)",
-        "entitlements": null,
-        "exceptionDomain": null,
-        "frameworks": [],
-        "minimumSystemVersion": null,
-        "providerShortName": "TEAMID"
-      }
     }
   }
 }
