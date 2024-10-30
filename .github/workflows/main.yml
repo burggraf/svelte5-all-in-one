@@ -12,10 +12,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        platform: [macos-latest]
         include:
-          - platform: 'macos-latest'
+          - platform: macos-latest
             args: '--target aarch64-apple-darwin'
-          #- platform: 'macos-latest'
+          #- platform: macos-latest
           #  args: '--target x86_64-apple-darwin'
           #- platform: 'ubuntu-22.04'
           #  args: ''
