@@ -227,54 +227,32 @@ jobs:
 
       # Create build.rs
       - name: Create build.rs
-      if: runner.os == 'Windows'
-      shell: powershell
-      run: |
-        $content = @'
-        fn main() {
-          tauri_build::build()
-        }
-        '@
-        Set-Content -Path "src-tauri/build.rs" -Value $content
-
-      - name: Create build.rs
-      if: runner.os != 'Windows'
-      run: |
-        cat > src-tauri/build.rs << 'EOF'
-        fn main() {
-          tauri_build::build()
-        }
-        EOF
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          $content = @'
+          fn main() {
+            tauri_build::build()
+          }
+          '@
+          Set-Content -Path "src-tauri/build.rs" -Value $content
 
       # Create main.rs
       - name: Create main.rs
-      if: runner.os == 'Windows'
-      shell: powershell
-      run: |
-        $content = @'
-        #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          $content = @'
+          #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-        fn main() {
-          tauri::Builder::default()
-            .run(tauri::generate_context!())
-            .expect("error while running tauri application");
-        }
-        '@
-        New-Item -ItemType Directory -Force -Path src-tauri/src
-        Set-Content -Path "src-tauri/src/main.rs" -Value $content
-
-      - name: Create main.rs
-      if: runner.os != 'Windows'
-      run: |
-        cat > src-tauri/src/main.rs << 'EOF'
-        #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
-
-        fn main() {
-          tauri::Builder::default()
-            .run(tauri::generate_context!())
-            .expect("error while running tauri application");
-        }
-        EOF
+          fn main() {
+            tauri::Builder::default()
+              .run(tauri::generate_context!())
+              .expect("error while running tauri application");
+          }
+          '@
+          New-Item -ItemType Directory -Force -Path src-tauri/src
+          Set-Content -Path "src-tauri/src/main.rs" -Value $content
 
       # Verify the icon
       - name: Verify icon
