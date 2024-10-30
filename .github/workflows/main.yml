@@ -642,7 +642,27 @@ jobs:
           
           echo "Final DMG verification:"
           codesign -vvv --deep --strict "$DMG_PATH"
-          spctl --assess -vv "$DMG_PATH"
+          # Verify DMG is properly stapled
+          xcrun stapler validate "$DMG_PATH"
+          
+          # Mount DMG and verify its contents
+          echo "Verifying DMG contents..."
+          MOUNT_POINT=$(mktemp -d)
+          hdiutil attach "$DMG_PATH" -mountpoint "$MOUNT_POINT" -nobrowse
+          
+          # Verify the app inside the DMG
+          DMG_APP="$MOUNT_POINT/sv1-demo.app"
+          if [ -d "$DMG_APP" ]; then
+            echo "Verifying app inside DMG:"
+            codesign -vvv --deep --strict "$DMG_APP"
+          else
+            echo "Warning: App not found in expected location in DMG"
+            ls -la "$MOUNT_POINT"
+          fi
+          
+          # Cleanup
+          hdiutil detach "$MOUNT_POINT"
+          rm -rf "$MOUNT_POINT"
 
       # Finally, upload the artifacts
       - name: Upload Artifacts
