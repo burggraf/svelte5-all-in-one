@@ -501,74 +501,83 @@ jobs:
             --sign "Developer ID Application: Mantis Bible Company (HEGN9W2S9J)" \
             "$APP_PATH"
 
-      # Then create and sign the DMG
-      - name: Create and Sign DMG
+      # Add this step after the Tauri build
+      - name: Create DMG
+        if: matrix.platform == 'macos-latest'
+        run: |
+          APP_PATH="./src-tauri/target/aarch64-apple-darwin/release/bundle/macos/sv1-demo.app"
+          DMG_PATH="./src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/sv1-demo_${{ env.VERSION }}_aarch64.dmg"
+          DMG_DIR="$(dirname "$DMG_PATH")"
+          
+          # Create DMG directory if it doesn't exist
+          mkdir -p "$DMG_DIR"
+          
+          # Create DMG using hdiutil
+          echo "Creating DMG..."
+          hdiutil create -volname "sv1-demo" \
+            -srcfolder "$APP_PATH" \
+            -ov \
+            -format UDZO \
+            "$DMG_PATH"
+          
+          echo "DMG created at: $DMG_PATH"
+          
+          # Verify DMG exists
+          if [ ! -f "$DMG_PATH" ]; then
+            echo "DMG creation failed!"
+            exit 1
+          fi
+
+      # Then sign the DMG
+      - name: Sign DMG
         if: matrix.platform == 'macos-latest'
         run: |
           DMG_PATH="./src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/sv1-demo_${{ env.VERSION }}_aarch64.dmg"
+          
           echo "Signing DMG at: $DMG_PATH"
+          codesign --force \
+            --sign "Developer ID Application: Mantis Bible Company (HEGN9W2S9J)" \
+            --timestamp \
+            "$DMG_PATH"
           
-          # Sign the DMG
-          codesign --force --sign "Developer ID Application: Mantis Bible Company (HEGN9W2S9J)" "$DMG_PATH"
-          
-          # Verify the signature
+          # Verify signing
           codesign --verify --verbose "$DMG_PATH"
 
-      # Now notarize both the .app and the DMG
-      - name: Notarize macOS App and DMG
+      # Then proceed with notarization
+      - name: Notarize DMG
         if: matrix.platform == 'macos-latest'
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_ID_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
           DEVELOPER_TEAM_ID: ${{ secrets.DEVELOPER_TEAM_ID }}
         run: |
-          APP_PATH="./src-tauri/target/aarch64-apple-darwin/release/bundle/macos/sv1-demo.app"
           DMG_PATH="./src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/sv1-demo_${{ env.VERSION }}_aarch64.dmg"
           
           echo "Notarizing DMG at: $DMG_PATH"
           
-          # Submit for notarization with detailed output
-          SUBMISSION_ID=$(xcrun notarytool submit "$DMG_PATH" \
+          # Submit for notarization
+          xcrun notarytool submit "$DMG_PATH" \
             --apple-id "$APPLE_ID" \
             --team-id "$DEVELOPER_TEAM_ID" \
             --password "$APPLE_ID_PASSWORD" \
             --wait \
-            --progress)
+            --progress
           
-          echo "Submission ID: $SUBMISSION_ID"
-          
-          # Get detailed info about the submission
-          xcrun notarytool info "$SUBMISSION_ID" \
-            --apple-id "$APPLE_ID" \
-            --team-id "$DEVELOPER_TEAM_ID" \
-            --password "$APPLE_ID_PASSWORD"
-          
-          # Get the log for the submission
-          xcrun notarytool log "$SUBMISSION_ID" \
-            --apple-id "$APPLE_ID" \
-            --team-id "$DEVELOPER_TEAM_ID" \
-            --password "$APPLE_ID_PASSWORD"
-          
-          # Check submission status
-          STATUS=$(xcrun notarytool info "$SUBMISSION_ID" \
-            --apple-id "$APPLE_ID" \
-            --team-id "$DEVELOPER_TEAM_ID" \
-            --password "$APPLE_ID_PASSWORD" | grep "status" | awk '{print $2}')
-          
-          if [ "$STATUS" != "Accepted" ]; then
-            echo "Notarization failed with status: $STATUS"
-            exit 1
-          fi
-          
-          echo "Notarization successful. Stapling..."
-          
-          # Staple both the .app and the DMG
-          xcrun stapler staple "$APP_PATH"
+          # Staple the notarization ticket
           xcrun stapler staple "$DMG_PATH"
           
           # Verify stapling
-          xcrun stapler validate "$APP_PATH"
           xcrun stapler validate "$DMG_PATH"
+
+      # Finally, upload the artifacts
+      - name: Upload Artifacts
+        if: matrix.platform == 'macos-latest'
+        uses: actions/upload-artifact@v3
+        with:
+          name: macos-artifacts
+          path: |
+            ./src-tauri/target/aarch64-apple-darwin/release/bundle/macos/*.app
+            ./src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/*.dmg
 
       # Add verification step before notarization
       - name: Verify Code Signing
