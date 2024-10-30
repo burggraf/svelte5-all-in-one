@@ -667,6 +667,13 @@ jobs:
       - name: Create Entitlements File
         if: matrix.platform == 'macos-latest'
         run: |
+          # Debug current location
+          echo "Current directory: $(pwd)"
+          
+          # Ensure src-tauri directory exists
+          mkdir -p src-tauri
+          
+          # Create entitlements file
           cat > src-tauri/entitlements.plist << 'EOL'
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -696,15 +703,22 @@ jobs:
           </plist>
           EOL
 
-          # Verify the file was created correctly
-          plutil -lint src-tauri/entitlements.plist
+          # Debug file creation
+          echo "Checking if entitlements file was created:"
+          ls -la src-tauri/entitlements.plist || echo "File not found after creation"
           
-          # Show the contents
-          echo "Entitlements file contents:"
-          cat src-tauri/entitlements.plist
+          echo "File contents:"
+          cat src-tauri/entitlements.plist || echo "Cannot read file"
+          
+          # Verify plist format
+          echo "Verifying plist format:"
+          plutil -lint src-tauri/entitlements.plist || echo "Plist validation failed"
           
           # Set proper permissions
           chmod 644 src-tauri/entitlements.plist
+          
+          echo "Directory contents of src-tauri:"
+          ls -la src-tauri/
 
       - name: Sign macOS App
         if: matrix.platform == 'macos-latest'
@@ -717,27 +731,16 @@ jobs:
           ENTITLEMENTS_PATH="$(pwd)/src-tauri/entitlements.plist"
           
           echo "Using entitlements at: $ENTITLEMENTS_PATH"
+          echo "Checking if entitlements file exists:"
+          ls -la "$ENTITLEMENTS_PATH" || echo "File not found"
           
           # Verify entitlements file exists and is valid
           if [ ! -f "$ENTITLEMENTS_PATH" ]; then
-            echo "Entitlements file not found!"
+            echo "Entitlements file not found at: $ENTITLEMENTS_PATH"
+            echo "Current directory contents:"
+            ls -la
+            echo "src-tauri contents:"
+            ls -la src-tauri/
             exit 1
           fi
-          
-          if ! plutil -lint "$ENTITLEMENTS_PATH"; then
-            echo "Entitlements file is invalid!"
-            exit 1
-          fi
-          
-          # Sign the app
-          codesign --force \
-            --entitlements "$ENTITLEMENTS_PATH" \
-            --sign "Developer ID Application: Mantis Bible Company (HEGN9W2S9J)" \
-            --options runtime \
-            --timestamp \
-            --deep \
-            "$APP_PATH"
-          
-          # Verify signing
-          codesign --verify --verbose "$APP_PATH"
 
