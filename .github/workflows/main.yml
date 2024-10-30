@@ -495,7 +495,14 @@ jobs:
           
           echo "Using entitlements at: $ENTITLEMENTS_PATH"
           
-          # Sign with hardened runtime
+          # Sign all binaries inside the app bundle
+          find "$APP_PATH/Contents/MacOS" -type f -exec codesign --force --options runtime \
+            --entitlements "$ENTITLEMENTS_PATH" \
+            --sign "Developer ID Application: Mantis Bible Company (HEGN9W2S9J)" \
+            --timestamp \
+            {} \;
+          
+          # Sign the app bundle itself
           codesign --force --options runtime \
             --entitlements "$ENTITLEMENTS_PATH" \
             --sign "Developer ID Application: Mantis Bible Company (HEGN9W2S9J)" \
@@ -572,6 +579,22 @@ jobs:
           xcrun stapler validate "$APP_PATH"
           xcrun stapler validate "$DMG_PATH"
 
+      # Add verification step before notarization
+      - name: Verify Code Signing
+        if: matrix.platform == 'macos-latest'
+        run: |
+          APP_PATH="./src-tauri/target/aarch64-apple-darwin/release/bundle/macos/sv1-demo.app"
+          DMG_PATH="./src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/sv1-demo_${{ env.VERSION }}_aarch64.dmg"
+          
+          echo "Verifying app signing..."
+          codesign -vvv --deep --strict "$APP_PATH"
+          
+          echo "Checking app entitlements..."
+          codesign -d --entitlements :- "$APP_PATH"
+          
+          echo "Verifying DMG signing..."
+          codesign -vvv --strict "$DMG_PATH"
+
       # Add these debug steps before signing
       - name: Debug Build Directory
         if: matrix.platform == 'macos-latest'
@@ -598,21 +621,6 @@ jobs:
           path: |
             ./src-tauri/target/aarch64-apple-darwin/release/bundle/macos/*.app
             ./src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/*.dmg
-
-      - name: Verify Code Signing
-        if: matrix.platform == 'macos-latest'
-        run: |
-          APP_PATH="./src-tauri/target/aarch64-apple-darwin/release/bundle/macos/sv1-demo.app"
-          DMG_PATH="./src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/sv1-demo_${{ env.VERSION }}_aarch64.dmg"
-          
-          echo "Verifying app signing..."
-          codesign -vvv --deep --strict "$APP_PATH"
-          
-          echo "Checking app entitlements..."
-          codesign -d --entitlements :- "$APP_PATH"
-          
-          echo "Verifying DMG signing..."
-          codesign -vvv --strict "$DMG_PATH"
 
       - name: Debug Entitlements File
         if: matrix.platform == 'macos-latest'
