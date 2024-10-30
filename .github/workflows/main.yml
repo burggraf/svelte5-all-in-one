@@ -468,3 +468,48 @@ jobs:
           prerelease: false
           args: ${{ matrix.args }}
 
+      # Add macOS specific steps after the Tauri build
+      - name: Decode and Import Signing Certificate
+        if: matrix.platform == 'macos-latest'
+        env:
+          CERTIFICATE_BASE64: ${{ secrets.MACOS_CERTIFICATE_BASE64 }}
+          CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+        run: |
+          echo "$CERTIFICATE_BASE64" | base64 --decode > certificate.p12
+          security create-keychain -p "build" build.keychain
+          security default-keychain -s build.keychain
+          security unlock-keychain -p "build" build.keychain
+          security import certificate.p12 -k build.keychain -P "$CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s -k "build" build.keychain
+
+      - name: Sign macOS App
+        if: matrix.platform == 'macos-latest'
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_ID_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
+          DEVELOPER_TEAM_ID: ${{ secrets.DEVELOPER_TEAM_ID }}
+        run: |
+          codesign --force --options runtime --sign "Developer ID Application: Mantis Bible Company (HEGN9W2S9J)" "src-tauri/target/release/bundle/macos/*.app"
+
+      - name: Notarize macOS App
+        if: matrix.platform == 'macos-latest'
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_ID_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
+          DEVELOPER_TEAM_ID: ${{ secrets.DEVELOPER_TEAM_ID }}
+        run: |
+          appPath="src-tauri/target/release/bundle/macos/*.app"
+          dmgPath="src-tauri/target/release/bundle/dmg/*.dmg"
+          xcrun notarytool submit "$dmgPath" --apple-id "$APPLE_ID" --team-id "$DEVELOPER_TEAM_ID" --password "$APPLE_ID_PASSWORD" --wait
+          xcrun stapler staple "$appPath"
+
+      # Optional: Upload artifacts
+      - name: Upload macOS Artifacts
+        if: matrix.platform == 'macos-latest'
+        uses: actions/upload-artifact@v3
+        with:
+          name: macos-app
+          path: |
+            src-tauri/target/release/bundle/macos/*.app
+            src-tauri/target/release/bundle/dmg/*.dmg
+

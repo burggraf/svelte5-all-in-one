@@ -3,7 +3,7 @@
   "title": "app title here",
   "homepage": "https://example.com",
   "description": "app description here",
-  "version": "0.5.1",
+  "version": "0.5.2",
   "identifier": "com.mycompany.sv1demo",
   "type": "module",
   "scripts": {
