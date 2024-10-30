@@ -482,6 +482,7 @@ jobs:
           security import certificate.p12 -k build.keychain -P "$CERTIFICATE_PASSWORD" -T /usr/bin/codesign
           security set-key-partition-list -S apple-tool:,apple: -s -k "build" build.keychain
 
+      # First, sign the .app
       - name: Sign macOS App
         if: matrix.platform == 'macos-latest'
         env:
@@ -489,39 +490,70 @@ jobs:
           APPLE_ID_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
           DEVELOPER_TEAM_ID: ${{ secrets.DEVELOPER_TEAM_ID }}
         run: |
-          # Find the .app file
-          APP_PATH=$(find . -name "*.app" -print -quit)
-          if [ -z "$APP_PATH" ]; then
-            echo "No .app file found!"
-            exit 1
-          fi
-          echo "Found app at: $APP_PATH"
+          APP_PATH="./src-tauri/target/aarch64-apple-darwin/release/bundle/macos/sv1-demo.app"
+          echo "Signing app at: $APP_PATH"
           
-          # Sign the app
+          # Sign all binaries inside the app bundle
+          find "$APP_PATH/Contents/MacOS" -type f -exec codesign --force --options runtime --sign "Developer ID Application: Mantis Bible Company (HEGN9W2S9J)" {} \;
+          
+          # Sign the app bundle itself
           codesign --force --options runtime --sign "Developer ID Application: Mantis Bible Company (HEGN9W2S9J)" "$APP_PATH"
+          
+          # Verify the signature
+          codesign --verify --verbose "$APP_PATH"
 
-      - name: Notarize macOS App
+      # Then create and sign the DMG
+      - name: Create and Sign DMG
+        if: matrix.platform == 'macos-latest'
+        run: |
+          DMG_PATH="./src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/sv1-demo_${{ env.VERSION }}_aarch64.dmg"
+          echo "Signing DMG at: $DMG_PATH"
+          
+          # Sign the DMG
+          codesign --force --sign "Developer ID Application: Mantis Bible Company (HEGN9W2S9J)" "$DMG_PATH"
+          
+          # Verify the signature
+          codesign --verify --verbose "$DMG_PATH"
+
+      # Now notarize both the .app and the DMG
+      - name: Notarize macOS App and DMG
         if: matrix.platform == 'macos-latest'
         env:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_ID_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
           DEVELOPER_TEAM_ID: ${{ secrets.DEVELOPER_TEAM_ID }}
         run: |
-          # Find the .app and .dmg files
-          APP_PATH=$(find . -name "*.app" -print -quit)
-          DMG_PATH=$(find . -name "*.dmg" -print -quit)
+          APP_PATH="./src-tauri/target/aarch64-apple-darwin/release/bundle/macos/sv1-demo.app"
+          DMG_PATH="./src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/sv1-demo_${{ env.VERSION }}_aarch64.dmg"
           
-          if [ -z "$DMG_PATH" ]; then
-            echo "No .dmg file found!"
+          echo "Notarizing DMG at: $DMG_PATH"
+          
+          # Create a temporary file for notarization log
+          NOTARIZE_LOG=$(mktemp)
+          
+          # Submit for notarization and wait for result
+          xcrun notarytool submit "$DMG_PATH" \
+            --apple-id "$APPLE_ID" \
+            --team-id "$DEVELOPER_TEAM_ID" \
+            --password "$APPLE_ID_PASSWORD" \
+            --wait > "$NOTARIZE_LOG"
+          
+          # Check if notarization succeeded
+          if ! grep -q "status: Accepted" "$NOTARIZE_LOG"; then
+            echo "Notarization failed:"
+            cat "$NOTARIZE_LOG"
             exit 1
           fi
           
-          echo "Found DMG at: $DMG_PATH"
-          echo "Found APP at: $APP_PATH"
+          echo "Notarization successful. Stapling..."
           
-          # Notarize and staple
-          xcrun notarytool submit "$DMG_PATH" --apple-id "$APPLE_ID" --team-id "$DEVELOPER_TEAM_ID" --password "$APPLE_ID_PASSWORD" --wait
+          # Staple both the .app and the DMG
           xcrun stapler staple "$APP_PATH"
+          xcrun stapler staple "$DMG_PATH"
+          
+          # Verify stapling
+          xcrun stapler validate "$APP_PATH"
+          xcrun stapler validate "$DMG_PATH"
 
       # Add these debug steps before signing
       - name: Debug Build Directory
@@ -547,6 +579,6 @@ jobs:
         with:
           name: macos-app
           path: |
-            **/*.app
-            **/*.dmg
+            ./src-tauri/target/aarch64-apple-darwin/release/bundle/macos/*.app
+            ./src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/*.dmg
 
