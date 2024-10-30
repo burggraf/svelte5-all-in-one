@@ -491,16 +491,14 @@ jobs:
           DEVELOPER_TEAM_ID: ${{ secrets.DEVELOPER_TEAM_ID }}
         run: |
           APP_PATH="./src-tauri/target/aarch64-apple-darwin/release/bundle/macos/sv1-demo.app"
-          echo "Signing app at: $APP_PATH"
           
-          # Sign all binaries inside the app bundle
-          find "$APP_PATH/Contents/MacOS" -type f -exec codesign --force --options runtime --sign "Developer ID Application: Mantis Bible Company (HEGN9W2S9J)" {} \;
-          
-          # Sign the app bundle itself
-          codesign --force --options runtime --sign "Developer ID Application: Mantis Bible Company (HEGN9W2S9J)" "$APP_PATH"
-          
-          # Verify the signature
-          codesign --verify --verbose "$APP_PATH"
+          # Sign with hardened runtime
+          codesign --force --options runtime \
+            --entitlements src-tauri/entitlements.plist \
+            --sign "Developer ID Application: Mantis Bible Company (HEGN9W2S9J)" \
+            --timestamp \
+            --deep \
+            "$APP_PATH"
 
       # Then create and sign the DMG
       - name: Create and Sign DMG
@@ -528,20 +526,36 @@ jobs:
           
           echo "Notarizing DMG at: $DMG_PATH"
           
-          # Create a temporary file for notarization log
-          NOTARIZE_LOG=$(mktemp)
-          
-          # Submit for notarization and wait for result
-          xcrun notarytool submit "$DMG_PATH" \
+          # Submit for notarization with detailed output
+          SUBMISSION_ID=$(xcrun notarytool submit "$DMG_PATH" \
             --apple-id "$APPLE_ID" \
             --team-id "$DEVELOPER_TEAM_ID" \
             --password "$APPLE_ID_PASSWORD" \
-            --wait > "$NOTARIZE_LOG"
+            --wait \
+            --progress)
           
-          # Check if notarization succeeded
-          if ! grep -q "status: Accepted" "$NOTARIZE_LOG"; then
-            echo "Notarization failed:"
-            cat "$NOTARIZE_LOG"
+          echo "Submission ID: $SUBMISSION_ID"
+          
+          # Get detailed info about the submission
+          xcrun notarytool info "$SUBMISSION_ID" \
+            --apple-id "$APPLE_ID" \
+            --team-id "$DEVELOPER_TEAM_ID" \
+            --password "$APPLE_ID_PASSWORD"
+          
+          # Get the log for the submission
+          xcrun notarytool log "$SUBMISSION_ID" \
+            --apple-id "$APPLE_ID" \
+            --team-id "$DEVELOPER_TEAM_ID" \
+            --password "$APPLE_ID_PASSWORD"
+          
+          # Check submission status
+          STATUS=$(xcrun notarytool info "$SUBMISSION_ID" \
+            --apple-id "$APPLE_ID" \
+            --team-id "$DEVELOPER_TEAM_ID" \
+            --password "$APPLE_ID_PASSWORD" | grep "status" | awk '{print $2}')
+          
+          if [ "$STATUS" != "Accepted" ]; then
+            echo "Notarization failed with status: $STATUS"
             exit 1
           fi
           
@@ -581,4 +595,19 @@ jobs:
           path: |
             ./src-tauri/target/aarch64-apple-darwin/release/bundle/macos/*.app
             ./src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/*.dmg
+
+      - name: Verify Code Signing
+        if: matrix.platform == 'macos-latest'
+        run: |
+          APP_PATH="./src-tauri/target/aarch64-apple-darwin/release/bundle/macos/sv1-demo.app"
+          DMG_PATH="./src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/sv1-demo_${{ env.VERSION }}_aarch64.dmg"
+          
+          echo "Verifying app signing..."
+          codesign -vvv --deep --strict "$APP_PATH"
+          
+          echo "Checking app entitlements..."
+          codesign -d --entitlements :- "$APP_PATH"
+          
+          echo "Verifying DMG signing..."
+          codesign -vvv --strict "$DMG_PATH"
 
