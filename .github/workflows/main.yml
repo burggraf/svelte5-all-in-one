@@ -495,19 +495,10 @@ jobs:
           
           echo "Using entitlements at: $ENTITLEMENTS_PATH"
           
-          # Sign all binaries inside the app bundle
-          find "$APP_PATH/Contents/MacOS" -type f -exec codesign --force --options runtime \
+          # Simple sign first
+          codesign --force \
             --entitlements "$ENTITLEMENTS_PATH" \
             --sign "Developer ID Application: Mantis Bible Company (HEGN9W2S9J)" \
-            --timestamp \
-            {} \;
-          
-          # Sign the app bundle itself
-          codesign --force --options runtime \
-            --entitlements "$ENTITLEMENTS_PATH" \
-            --sign "Developer ID Application: Mantis Bible Company (HEGN9W2S9J)" \
-            --timestamp \
-            --deep \
             "$APP_PATH"
 
       # Then create and sign the DMG
