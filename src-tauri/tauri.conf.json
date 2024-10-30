@@ -1,18 +1,6 @@
 {
   "$schema": "https://raw.githubusercontent.com/tauri-apps/tauri/dev/tooling/cli/schema.json",
-  "build": {
-    "beforeBuildCommand": "",
-    "beforeDevCommand": ""
-  },
-  "package": {
-    "productName": "sv1",
-    "version": "0.3.0",
-    "identifier": "com.example.sv1"
-  },
   "app": {
-    "security": {
-      "csp": null
-    },
     "windows": [
       {
         "fullscreen": false,
@@ -23,34 +11,14 @@
       }
     ]
   },
+  "build": {
+    "beforeBuildCommand": "",
+    "beforeDevCommand": ""
+  },
   "bundle": {
     "active": true,
     "category": "DeveloperTool",
-    "copyright": "",
-    "externalBin": [],
-    "icon": [
-      "icons/32x32.png",
-      "icons/128x128.png",
-      "icons/128x128@2x.png",
-      "icons/icon.icns",
-      "icons/icon.ico"
-    ],
-    "longDescription": "",
-    "shortDescription": "",
-    "resources": [],
-    "targets": "all",
-    "macOS": {
-      "entitlements": "entitlements.plist",
-      "exceptionDomain": null,
-      "frameworks": [],
-      "minimumSystemVersion": null,
-      "providerShortName": "TEAMID",
-      "signingIdentity": "Developer ID Application: Mantis Bible Company (HEGN9W2S9J)"
-    },
-    "windows": {
-      "certificateThumbprint": null,
-      "digestAlgorithm": "sha256",
-      "timestampUrl": ""
-    }
+    "identifier": "com.tauri.dev",
+    "targets": ["app", "deb", "appimage"]
   }
 }
