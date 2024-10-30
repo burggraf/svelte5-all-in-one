@@ -667,10 +667,7 @@ jobs:
       - name: Create Entitlements File
         if: matrix.platform == 'macos-latest'
         run: |
-          # Debug current location
-          echo "Current directory: $(pwd)"
-          
-          # Ensure src-tauri directory exists
+          # Ensure directory exists
           mkdir -p src-tauri
           
           # Create entitlements file
@@ -702,23 +699,10 @@ jobs:
           </dict>
           </plist>
           EOL
-
+          
           # Debug file creation
           echo "Checking if entitlements file was created:"
-          ls -la src-tauri/entitlements.plist || echo "File not found after creation"
-          
-          echo "File contents:"
-          cat src-tauri/entitlements.plist || echo "Cannot read file"
-          
-          # Verify plist format
-          echo "Verifying plist format:"
-          plutil -lint src-tauri/entitlements.plist || echo "Plist validation failed"
-          
-          # Set proper permissions
-          chmod 644 src-tauri/entitlements.plist
-          
-          echo "Directory contents of src-tauri:"
-          ls -la src-tauri/
+          ls -la src-tauri/entitlements.plist
 
       - name: Sign macOS App
         if: matrix.platform == 'macos-latest'
