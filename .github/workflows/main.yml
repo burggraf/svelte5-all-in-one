@@ -560,7 +560,7 @@ jobs:
           DEVELOPER_TEAM_ID: ${{ secrets.DEVELOPER_TEAM_ID }}
         run: |
           # Modify tauri.conf.json to disable DMG creation
-          sed -i.bak 's/"targets": \["dmg", "app"\]/"targets": \["app"\]/' src-tauri/tauri.conf.json
+          sed -i '' 's/"targets":\["dmg","app"\]/"targets":\["app"\]/' src-tauri/tauri.conf.json
           
           # Build the app
           npm run tauri build -- --target aarch64-apple-darwin
